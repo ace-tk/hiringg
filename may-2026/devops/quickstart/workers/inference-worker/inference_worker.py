@@ -6,7 +6,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 iii = register_worker(
     os.environ.get("III_URL", "ws://localhost:49134"),
-    InitOptions(worker_name="math-worker"),
+    InitOptions(worker_name="inference-worker"),
 )
 logger = Logger()
 
@@ -71,32 +71,15 @@ tokenizer.chat_template = ("""{{ bos_token }}
 
 # 3. Run inference
 def run_inference_handler(payload: Dict[str, str | List[Dict[str, Any]]]) -> Dict[str, Any]:
-    # prompt = "Explain quantum entanglement in simple terms."
+    logger.info("run_inference_handler received payload", {"payload": payload})
     messages = payload.get("messages", [])
-
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
-
-    output = model.generate(**inputs, max_new_tokens=32000)
+    # Limit generation to 64 tokens for quick response
+    output = model.generate(**inputs, max_new_tokens=64)
     result = tokenizer.decode(output[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
-
-    print(result)
-
-    # running_inference = iii.trigger(
-    #     {
-    #         "function_id": "inference::get",
-    #         "payload": {"scope": "math", "key": "running_inference"},
-    #     }
-    # )
-    # new_result = payload | {"messages": payload["messages"] + (running_inference or [])}
-    # iii.trigger(
-    #     {
-    #         "function_id": "inference::set",
-    #         "payload": {"scope": "math", "key": "running_inference", "value": new_result},
-    #     }
-    # )
-    # result["running_inference"] = new_result
-    return result
+    logger.info("run_inference_handler completed", {"result": result})
+    return {"result": result}
 
 # def add_handler(payload: dict) -> dict:
 #     a = payload.get("a", 0)
